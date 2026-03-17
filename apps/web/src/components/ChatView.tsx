@@ -284,7 +284,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
   // Tracks whether the user explicitly dismissed the sidebar for the active turn.
   const planSidebarDismissedForTurnRef = useRef<string | null>(null);
   // When set, the thread-change reset effect will open the sidebar instead of closing it.
-  // Used by "Implement in new thread" to carry the sidebar-open intent across navigation.
+  // Used by "Implement in a new thread" to carry the sidebar-open intent across navigation.
   const planSidebarOpenOnNextThreadRef = useRef(false);
   const [nowTick, setNowTick] = useState(() => Date.now());
   const [terminalFocusRequestId, setTerminalFocusRequestId] = useState(0);
@@ -3815,7 +3815,80 @@ export default function ChatView({ threadId }: ChatViewProps) {
                                       disabled={isSendBusy || isConnecting}
                                       onClick={() => void onImplementPlanInNewThread()}
                                     >
-                                      Implement in new thread
+                                      Implement in a new thread
+                                    </MenuItem>
+                                  </MenuPopup>
+                                </Menu>
+                              </div>
+                            )
+                          ) : (
+                            <button
+                              type="submit"
+                              className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/90 text-primary-foreground transition-all duration-150 hover:bg-primary hover:scale-105 disabled:opacity-30 disabled:hover:scale-100 sm:h-8 sm:w-8"
+                              disabled={
+                                isSendBusy ||
+                                isConnecting ||
+                                (!prompt.trim() && composerImages.length === 0)
+                              }
+                              aria-label={
+                                isConnecting
+                                  ? "Connecting"
+                                  : isPreparingWorktree
+                                    ? "Preparing worktree"
+                                    : isSendBusy
+                                      ? "Sending"
+                                      : "Send message"
+                              }
+                            >
+                              {isConnecting || isSendBusy ? (
+                                <svg
+                                  width="14"
+                                  height="14"
+                                  viewBox="0 0 14 14"
+                                  fill="none"
+                                  className="animate-spin"
+                                  aria-hidden="true"
+                                >
+                                  <circle
+                                    cx="7"
+                                    cy="7"
+                                    r="5.5"
+                                    stroke="currentColor"
+                                    strokeWidth="1.5"
+                                    strokeLinecap="round"
+                                    strokeDasharray="20 12"
+                                  />
+                                </svg>
+                            ) : (
+                              <div className="flex items-center">
+                                <Button
+                                  type="submit"
+                                  size="sm"
+                                  className="h-9 rounded-l-full rounded-r-none px-4 sm:h-8"
+                                  disabled={isSendBusy || isConnecting}
+                                >
+                                  {isConnecting || isSendBusy ? "Sending..." : "Implement"}
+                                </Button>
+                                <Menu>
+                                  <MenuTrigger
+                                    render={
+                                      <Button
+                                        size="sm"
+                                        variant="default"
+                                        className="h-9 rounded-l-none rounded-r-full border-l-white/12 px-2 sm:h-8"
+                                        aria-label="Implementation actions"
+                                        disabled={isSendBusy || isConnecting}
+                                      />
+                                    }
+                                  >
+                                    <ChevronDownIcon className="size-3.5" />
+                                  </MenuTrigger>
+                                  <MenuPopup align="end" side="top">
+                                    <MenuItem
+                                      disabled={isSendBusy || isConnecting}
+                                      onClick={() => void onImplementPlanInNewThread()}
+                                    >
+                                      Implement in a new thread
                                     </MenuItem>
                                   </MenuPopup>
                                 </Menu>
