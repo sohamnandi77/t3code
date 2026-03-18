@@ -7,10 +7,11 @@ import type {
 } from "@anthropic-ai/claude-agent-sdk";
 import { ApprovalRequestId, ProviderItemId, ThreadId } from "@t3tools/contracts";
 import { assert, describe, it } from "@effect/vitest";
-import { Effect, Fiber, Random, Stream } from "effect";
+import { Effect, Fiber, Layer, Random, Stream } from "effect";
 
 import { ProviderAdapterValidationError } from "../Errors.ts";
 import { ClaudeAdapter } from "../Services/ClaudeAdapter.ts";
+import { AnthropicEnvOverridesLive } from "../Services/AnthropicEnvOverrides.ts";
 import { makeClaudeAdapterLive, type ClaudeAdapterLiveOptions } from "./ClaudeAdapter.ts";
 
 class FakeClaudeQuery implements AsyncIterable<SDKMessage> {
@@ -94,7 +95,7 @@ class FakeClaudeQuery implements AsyncIterable<SDKMessage> {
 }
 
 interface Harness {
-  readonly layer: ReturnType<typeof makeClaudeAdapterLive>;
+  readonly layer: Layer.Layer<ClaudeAdapter, never, never>;
   readonly query: FakeClaudeQuery;
   readonly getLastCreateQueryInput: () =>
     | {
@@ -134,7 +135,7 @@ function makeHarness(config?: {
   };
 
   return {
-    layer: makeClaudeAdapterLive(adapterOptions),
+    layer: Layer.provideMerge(makeClaudeAdapterLive(adapterOptions), AnthropicEnvOverridesLive),
     query,
     getLastCreateQueryInput: () => createInput,
   };
@@ -258,6 +259,7 @@ describe("ClaudeAdapterLive", () => {
       yield* adapter.startSession({
         threadId: THREAD_ID,
         provider: "claudeAgent",
+        model: "claude-opus-4-6",
         runtimeMode: "full-access",
         modelOptions: {
           claudeAgent: {
@@ -274,13 +276,162 @@ describe("ClaudeAdapterLive", () => {
     );
   });
 
-  it.effect("maps ultrathink to max effort and prefixes the prompt", () => {
+  it.effect("ignores unsupported max effort for Sonnet 4.6", () => {
+    const harness = makeHarness();
+    return Effect.gen(function* () {
+      const adapter = yield* ClaudeAdapter;
+      yield* adapter.startSession({
+        threadId: THREAD_ID,
+        provider: "claudeAgent",
+        model: "claude-sonnet-4-6",
+        runtimeMode: "full-access",
+        modelOptions: {
+          claudeAgent: {
+            effort: "max",
+          },
+        },
+      });
+
+      const createInput = harness.getLastCreateQueryInput();
+      assert.equal(createInput?.options.effort, undefined);
+    }).pipe(
+      Effect.provideService(Random.Random, makeDeterministicRandomService()),
+      Effect.provide(harness.layer),
+    );
+  });
+
+  it.effect("ignores adaptive effort for Haiku 4.5", () => {
+    const harness = makeHarness();
+    return Effect.gen(function* () {
+      const adapter = yield* ClaudeAdapter;
+      yield* adapter.startSession({
+        threadId: THREAD_ID,
+        provider: "claudeAgent",
+        model: "claude-haiku-4-5",
+        runtimeMode: "full-access",
+        modelOptions: {
+          claudeAgent: {
+            effort: "high",
+          },
+        },
+      });
+
+      const createInput = harness.getLastCreateQueryInput();
+      assert.equal(createInput?.options.effort, undefined);
+    }).pipe(
+      Effect.provideService(Random.Random, makeDeterministicRandomService()),
+      Effect.provide(harness.layer),
+    );
+  });
+
+  it.effect("forwards Claude thinking toggle into SDK settings for Haiku 4.5", () => {
+    const harness = makeHarness();
+    return Effect.gen(function* () {
+      const adapter = yield* ClaudeAdapter;
+      yield* adapter.startSession({
+        threadId: THREAD_ID,
+        provider: "claudeAgent",
+        model: "claude-haiku-4-5",
+        runtimeMode: "full-access",
+        modelOptions: {
+          claudeAgent: {
+            thinking: false,
+          },
+        },
+      });
+
+      const createInput = harness.getLastCreateQueryInput();
+      assert.deepEqual(createInput?.options.settings, {
+        alwaysThinkingEnabled: false,
+      });
+    }).pipe(
+      Effect.provideService(Random.Random, makeDeterministicRandomService()),
+      Effect.provide(harness.layer),
+    );
+  });
+
+  it.effect("ignores Claude thinking toggle for non-Haiku models", () => {
+    const harness = makeHarness();
+    return Effect.gen(function* () {
+      const adapter = yield* ClaudeAdapter;
+      yield* adapter.startSession({
+        threadId: THREAD_ID,
+        provider: "claudeAgent",
+        model: "claude-sonnet-4-6",
+        runtimeMode: "full-access",
+        modelOptions: {
+          claudeAgent: {
+            thinking: false,
+          },
+        },
+      });
+
+      const createInput = harness.getLastCreateQueryInput();
+      assert.equal(createInput?.options.settings, undefined);
+    }).pipe(
+      Effect.provideService(Random.Random, makeDeterministicRandomService()),
+      Effect.provide(harness.layer),
+    );
+  });
+
+  it.effect("forwards claude fast mode into SDK settings", () => {
+    const harness = makeHarness();
+    return Effect.gen(function* () {
+      const adapter = yield* ClaudeAdapter;
+      yield* adapter.startSession({
+        threadId: THREAD_ID,
+        provider: "claudeAgent",
+        model: "claude-opus-4-6",
+        runtimeMode: "full-access",
+        modelOptions: {
+          claudeAgent: {
+            fastMode: true,
+          },
+        },
+      });
+
+      const createInput = harness.getLastCreateQueryInput();
+      assert.deepEqual(createInput?.options.settings, {
+        fastMode: true,
+      });
+    }).pipe(
+      Effect.provideService(Random.Random, makeDeterministicRandomService()),
+      Effect.provide(harness.layer),
+    );
+  });
+
+  it.effect("ignores claude fast mode for non-opus models", () => {
+    const harness = makeHarness();
+    return Effect.gen(function* () {
+      const adapter = yield* ClaudeAdapter;
+      yield* adapter.startSession({
+        threadId: THREAD_ID,
+        provider: "claudeAgent",
+        model: "claude-sonnet-4-6",
+        runtimeMode: "full-access",
+        modelOptions: {
+          claudeAgent: {
+            fastMode: true,
+          },
+        },
+      });
+
+      const createInput = harness.getLastCreateQueryInput();
+      assert.equal(createInput?.options.settings, undefined);
+    }).pipe(
+      Effect.provideService(Random.Random, makeDeterministicRandomService()),
+      Effect.provide(harness.layer),
+    );
+  });
+
+  it.effect("treats ultrathink as a prompt keyword instead of a session effort", () => {
     const harness = makeHarness();
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
       const session = yield* adapter.startSession({
         threadId: THREAD_ID,
         provider: "claudeAgent",
+        model: "claude-sonnet-4-6",
         runtimeMode: "full-access",
         modelOptions: {
           claudeAgent: {
@@ -293,6 +444,7 @@ describe("ClaudeAdapterLive", () => {
         threadId: session.threadId,
         input: "Investigate the edge cases",
         attachments: [],
+        model: "claude-sonnet-4-6",
         modelOptions: {
           claudeAgent: {
             effort: "ultrathink",
@@ -301,7 +453,7 @@ describe("ClaudeAdapterLive", () => {
       });
 
       const createInput = harness.getLastCreateQueryInput();
-      assert.equal(createInput?.options.effort, "max");
+      assert.equal(createInput?.options.effort, undefined);
       const promptText = yield* Effect.promise(() => readFirstPromptText(createInput));
       assert.equal(promptText, "Ultrathink:\nInvestigate the edge cases");
     }).pipe(

@@ -161,6 +161,7 @@ export function createWsNativeApi(): NativeApi {
       getConfig: () => transport.request(WS_METHODS.serverGetConfig),
       upsertKeybinding: (input) => transport.request(WS_METHODS.serverUpsertKeybinding, input),
       setCodexOpenAiEnv: (input) => transport.request(WS_METHODS.codexSetOpenAiEnv, input),
+      setAnthropicEnv: (input) => transport.request(WS_METHODS.anthropicSetEnv, input),
     },
     orchestration: {
       getSnapshot: () => transport.request(ORCHESTRATION_WS_METHODS.getSnapshot),

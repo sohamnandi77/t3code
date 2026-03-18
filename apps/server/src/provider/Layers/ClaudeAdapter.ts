@@ -37,7 +37,15 @@ import {
   TurnId,
   type UserInputQuestion,
 } from "@t3tools/contracts";
-import { applyClaudePromptEffortPrefix, getEffectiveClaudeCodeEffort } from "@t3tools/shared/model";
+import {
+  applyClaudePromptEffortPrefix,
+  getEffectiveClaudeCodeEffort,
+  getReasoningEffortOptions,
+  resolveReasoningEffortForProvider,
+  supportsClaudeFastMode,
+  supportsClaudeThinkingToggle,
+  supportsClaudeUltrathinkKeyword,
+} from "@t3tools/shared/model";
 import { Cause, DateTime, Deferred, Effect, Layer, Queue, Random, Ref, Stream } from "effect";
 
 import {
@@ -49,6 +57,7 @@ import {
   type ProviderAdapterError,
 } from "../Errors.ts";
 import { ClaudeAdapter, type ClaudeAdapterShape } from "../Services/ClaudeAdapter.ts";
+import { AnthropicEnvOverrides } from "../Services/AnthropicEnvOverrides.ts";
 import { type EventNdjsonLogger, makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
 
 const PROVIDER = "claudeAgent" as const;
@@ -347,10 +356,18 @@ function buildUserMessage(input: ProviderSendTurnInput): SDKUserMessage {
     }
   }
 
-  const text = applyClaudePromptEffortPrefix(
-    fragments.join("\n\n"),
+  const requestedEffort = resolveReasoningEffortForProvider(
+    "claudeAgent",
     input.modelOptions?.claudeAgent?.effort ?? null,
   );
+  const supportedEffortOptions = getReasoningEffortOptions("claudeAgent", input.model);
+  const promptEffort =
+    requestedEffort === "ultrathink" && supportsClaudeUltrathinkKeyword(input.model)
+      ? "ultrathink"
+      : requestedEffort && supportedEffortOptions.includes(requestedEffort)
+        ? requestedEffort
+        : null;
+  const text = applyClaudePromptEffortPrefix(fragments.join("\n\n"), promptEffort);
 
   return {
     type: "user",
@@ -638,6 +655,7 @@ function sdkNativeItemId(message: SDKMessage): string | undefined {
 
 function makeClaudeAdapter(options?: ClaudeAdapterLiveOptions) {
   return Effect.gen(function* () {
+    const anthropicEnvOverrides = yield* AnthropicEnvOverrides;
     const nativeEventLogger =
       options?.nativeEventLogger ??
       (options?.nativeEventLogPath !== undefined
@@ -2193,18 +2211,37 @@ function makeClaudeAdapter(options?: ClaudeAdapterLiveOptions) {
           );
 
         const providerOptions = input.providerOptions?.claudeAgent;
-        const effort = input.modelOptions?.claudeAgent?.effort;
+        const requestedEffort = resolveReasoningEffortForProvider(
+          "claudeAgent",
+          input.modelOptions?.claudeAgent?.effort ?? null,
+        );
+        const supportedEffortOptions = getReasoningEffortOptions("claudeAgent", input.model);
+        const effort =
+          requestedEffort && supportedEffortOptions.includes(requestedEffort)
+            ? requestedEffort
+            : null;
+        const fastMode =
+          input.modelOptions?.claudeAgent?.fastMode === true && supportsClaudeFastMode(input.model);
+        const thinking =
+          typeof input.modelOptions?.claudeAgent?.thinking === "boolean" &&
+          supportsClaudeThinkingToggle(input.model)
+            ? input.modelOptions.claudeAgent.thinking
+            : undefined;
         const effectiveEffort = getEffectiveClaudeCodeEffort(effort);
         const permissionMode =
           toPermissionMode(providerOptions?.permissionMode) ??
           (input.runtimeMode === "full-access" ? "bypassPermissions" : undefined);
+        const settings = {
+          ...(typeof thinking === "boolean" ? { alwaysThinkingEnabled: thinking } : {}),
+          ...(fastMode ? { fastMode: true } : {}),
+        };
+
+        const anthOverrides = yield* anthropicEnvOverrides.get;
 
         const queryOptions: ClaudeQueryOptions = {
           ...(input.cwd ? { cwd: input.cwd } : {}),
           ...(input.model ? { model: input.model } : {}),
-          ...(providerOptions?.binaryPath
-            ? { pathToClaudeCodeExecutable: providerOptions.binaryPath }
-            : {}),
+          pathToClaudeCodeExecutable: providerOptions?.binaryPath ?? "claude",
           ...(effectiveEffort ? { effort: effectiveEffort } : {}),
           ...(permissionMode ? { permissionMode } : {}),
           ...(permissionMode === "bypassPermissions"
@@ -2213,11 +2250,23 @@ function makeClaudeAdapter(options?: ClaudeAdapterLiveOptions) {
           ...(providerOptions?.maxThinkingTokens !== undefined
             ? { maxThinkingTokens: providerOptions.maxThinkingTokens }
             : {}),
+          ...(Object.keys(settings).length > 0 ? { settings } : {}),
           ...(resumeState?.resume ? { resume: resumeState.resume } : {}),
           ...(resumeState?.resumeSessionAt ? { resumeSessionAt: resumeState.resumeSessionAt } : {}),
           includePartialMessages: true,
           canUseTool,
-          env: process.env,
+          env: {
+            ...process.env,
+            ...(anthOverrides.anthropicBaseUrl
+              ? { ANTHROPIC_BASE_URL: anthOverrides.anthropicBaseUrl }
+              : {}),
+            ...(anthOverrides.anthropicAuthToken
+              ? {
+                  ANTHROPIC_AUTH_TOKEN: anthOverrides.anthropicAuthToken,
+                  ANTHROPIC_API_KEY: anthOverrides.anthropicAuthToken,
+                }
+              : {}),
+          },
           ...(input.cwd ? { additionalDirectories: [input.cwd] } : {}),
         };
 
@@ -2302,6 +2351,7 @@ function makeClaudeAdapter(options?: ClaudeAdapterLiveOptions) {
               ...(providerOptions?.maxThinkingTokens !== undefined
                 ? { maxThinkingTokens: providerOptions.maxThinkingTokens }
                 : {}),
+              ...(fastMode ? { fastMode: true } : {}),
             },
           },
           providerRefs: {},

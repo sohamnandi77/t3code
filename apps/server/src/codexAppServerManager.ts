@@ -133,6 +133,8 @@ export interface CodexAppServerStartSessionInput {
   readonly providerOptions?: ProviderSessionStartInput["providerOptions"];
   readonly openaiApiKey?: string;
   readonly openaiBaseUrl?: string;
+  readonly anthropicBaseUrl?: string;
+  readonly anthropicAuthToken?: string;
   readonly runtimeMode: RuntimeMode;
 }
 
@@ -546,6 +548,7 @@ export class CodexAppServerManager extends EventEmitter<CodexAppServerManagerEve
 
       const codexOptions = readCodexProviderOptions(input);
       const openAiOverrides = readCodexOpenAiEnvOverrides(input);
+      const anthropicOverrides = readAnthropicEnvOverrides(input);
       const codexBinaryPath = codexOptions.binaryPath ?? "codex";
       const codexHomePath = codexOptions.homePath;
       this.assertSupportedCodexCliVersion({
@@ -561,6 +564,12 @@ export class CodexAppServerManager extends EventEmitter<CodexAppServerManagerEve
           ...(openAiOverrides.openaiApiKey ? { OPENAI_API_KEY: openAiOverrides.openaiApiKey } : {}),
           ...(openAiOverrides.openaiBaseUrl
             ? { OPENAI_BASE_URL: openAiOverrides.openaiBaseUrl }
+            : {}),
+          ...(anthropicOverrides.anthropicBaseUrl
+            ? { ANTHROPIC_BASE_URL: anthropicOverrides.anthropicBaseUrl }
+            : {}),
+          ...(anthropicOverrides.anthropicAuthToken
+            ? { ANTHROPIC_AUTH_TOKEN: anthropicOverrides.anthropicAuthToken }
             : {}),
         },
         stdio: ["pipe", "pipe", "pipe"],
@@ -1541,6 +1550,18 @@ function readCodexOpenAiEnvOverrides(input: CodexAppServerStartSessionInput): {
   return {
     ...(openaiApiKey ? { openaiApiKey } : {}),
     ...(openaiBaseUrl ? { openaiBaseUrl } : {}),
+  };
+}
+
+function readAnthropicEnvOverrides(input: CodexAppServerStartSessionInput): {
+  readonly anthropicBaseUrl?: string;
+  readonly anthropicAuthToken?: string;
+} {
+  const anthropicBaseUrl = input.anthropicBaseUrl?.trim();
+  const anthropicAuthToken = input.anthropicAuthToken?.trim();
+  return {
+    ...(anthropicBaseUrl ? { anthropicBaseUrl } : {}),
+    ...(anthropicAuthToken ? { anthropicAuthToken } : {}),
   };
 }
 

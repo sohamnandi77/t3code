@@ -42,6 +42,7 @@ import { makeProviderServiceLive } from "../src/provider/Layers/ProviderService.
 import { makeCodexAdapterLive } from "../src/provider/Layers/CodexAdapter.ts";
 import { CodexAdapter } from "../src/provider/Services/CodexAdapter.ts";
 import { ProviderService } from "../src/provider/Services/ProviderService.ts";
+import { AnthropicEnvOverridesLive } from "../src/provider/Services/AnthropicEnvOverrides.ts";
 import { CodexOpenAiEnvOverridesLive } from "../src/provider/Services/CodexOpenAiEnvOverrides.ts";
 import { AnalyticsService } from "../src/telemetry/Services/AnalyticsService.ts";
 import { CheckpointReactorLive } from "../src/orchestration/Layers/CheckpointReactor.ts";
@@ -265,6 +266,7 @@ export const makeOrchestrationIntegrationHarness = (
       Layer.provide(makeCodexAdapterLive()),
       Layer.provideMerge(ServerConfig.layerTest(workspaceDir, stateDir)),
       Layer.provideMerge(NodeServices.layer),
+      Layer.provideMerge(AnthropicEnvOverridesLive),
       Layer.provideMerge(CodexOpenAiEnvOverridesLive),
       Layer.provideMerge(providerSessionDirectoryLayer),
     );

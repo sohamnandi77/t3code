@@ -27,6 +27,7 @@ import { ProviderSessionDirectoryLive } from "./provider/Layers/ProviderSessionD
 import { ProviderService } from "./provider/Services/ProviderService";
 import { makeEventNdjsonLogger } from "./provider/Layers/EventNdjsonLogger";
 import { CodexOpenAiEnvOverrides } from "./provider/Services/CodexOpenAiEnvOverrides";
+import { AnthropicEnvOverrides } from "./provider/Services/AnthropicEnvOverrides";
 
 import { TerminalManagerLive } from "./terminal/Layers/Manager";
 import { KeybindingsLive } from "./keybindings";
@@ -47,6 +48,7 @@ export function makeServerProviderLayer(): Layer.Layer<
   | FileSystem.FileSystem
   | AnalyticsService
   | CodexOpenAiEnvOverrides
+  | AnthropicEnvOverrides
 > {
   return Effect.gen(function* () {
     const { stateDir } = yield* ServerConfig;

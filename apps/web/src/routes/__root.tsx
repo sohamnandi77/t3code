@@ -54,6 +54,7 @@ function RootRouteView() {
       <AnchoredToastProvider>
         <EventRouter />
         <CodexOpenAiEnvSync />
+        <AnthropicEnvSync />
         <DesktopProjectBootstrap />
         <Outlet />
       </AnchoredToastProvider>
@@ -88,6 +89,37 @@ function CodexOpenAiEnvSync() {
       })
       .catch(() => undefined);
   }, [api, debouncedApiKey, debouncedBaseUrl]);
+
+  return null;
+}
+
+function AnthropicEnvSync() {
+  const { settings } = useAppSettings();
+  const api = readNativeApi();
+  const [debouncedAuthToken] = useDebouncedValue(settings.anthropicAuthToken, {
+    wait: 300,
+  });
+  const [debouncedBaseUrl] = useDebouncedValue(settings.anthropicBaseUrl, {
+    wait: 300,
+  });
+  const lastSignatureRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!api) return;
+    const anthropicAuthToken = debouncedAuthToken.trim();
+    const anthropicBaseUrl = debouncedBaseUrl.trim();
+    const signature = `${anthropicBaseUrl}::${anthropicAuthToken}`;
+    if (signature === lastSignatureRef.current) {
+      return;
+    }
+    lastSignatureRef.current = signature;
+    void api.server
+      .setAnthropicEnv({
+        anthropicAuthToken: anthropicAuthToken.length > 0 ? anthropicAuthToken : null,
+        anthropicBaseUrl: anthropicBaseUrl.length > 0 ? anthropicBaseUrl : null,
+      })
+      .catch(() => undefined);
+  }, [api, debouncedAuthToken, debouncedBaseUrl]);
 
   return null;
 }

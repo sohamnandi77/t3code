@@ -26,6 +26,7 @@ import type {
 } from "./project";
 import type { ServerConfig } from "./server";
 import type { CodexSetOpenAiEnvInput, CodexSetOpenAiEnvResult } from "./codex";
+import type { AnthropicSetEnvInput, AnthropicSetEnvResult } from "./anthropic";
 import type {
   TerminalClearInput,
   TerminalCloseInput,
@@ -161,6 +162,7 @@ export interface NativeApi {
     getConfig: () => Promise<ServerConfig>;
     upsertKeybinding: (input: ServerUpsertKeybindingInput) => Promise<ServerUpsertKeybindingResult>;
     setCodexOpenAiEnv: (input: CodexSetOpenAiEnvInput) => Promise<CodexSetOpenAiEnvResult>;
+    setAnthropicEnv: (input: AnthropicSetEnvInput) => Promise<AnthropicSetEnvResult>;
   };
   orchestration: {
     getSnapshot: () => Promise<OrchestrationReadModel>;

@@ -11,6 +11,7 @@ import { ServerLive } from "./wsServer";
 import { NetService } from "@t3tools/shared/Net";
 import { FetchHttpClient } from "effect/unstable/http";
 import { CodexOpenAiEnvOverridesLive } from "./provider/Services/CodexOpenAiEnvOverrides";
+import { AnthropicEnvOverridesLive } from "./provider/Services/AnthropicEnvOverrides";
 
 const RuntimeLayer = Layer.empty.pipe(
   Layer.provideMerge(CliConfig.layer),
@@ -18,6 +19,7 @@ const RuntimeLayer = Layer.empty.pipe(
   Layer.provideMerge(OpenLive),
   Layer.provideMerge(NetService.layer),
   Layer.provideMerge(CodexOpenAiEnvOverridesLive),
+  Layer.provideMerge(AnthropicEnvOverridesLive),
   Layer.provideMerge(NodeServices.layer),
   Layer.provideMerge(FetchHttpClient.layer),
 );

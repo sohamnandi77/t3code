@@ -24,6 +24,7 @@ import {
 import { ServerConfig } from "../../config.ts";
 import { ProviderAdapterValidationError } from "../Errors.ts";
 import { CodexAdapter } from "../Services/CodexAdapter.ts";
+import { AnthropicEnvOverridesLive } from "../Services/AnthropicEnvOverrides.ts";
 import { CodexOpenAiEnvOverridesLive } from "../Services/CodexOpenAiEnvOverrides.ts";
 import { ProviderSessionDirectory } from "../Services/ProviderSessionDirectory.ts";
 import { makeCodexAdapterLive } from "./CodexAdapter.ts";
@@ -153,6 +154,7 @@ const validationLayer = it.layer(
   makeCodexAdapterLive({ manager: validationManager }).pipe(
     Layer.provideMerge(ServerConfig.layerTest(process.cwd(), process.cwd())),
     Layer.provideMerge(providerSessionDirectoryTestLayer),
+    Layer.provideMerge(AnthropicEnvOverridesLive),
     Layer.provideMerge(CodexOpenAiEnvOverridesLive),
     Layer.provideMerge(NodeServices.layer),
   ),
@@ -218,6 +220,7 @@ const sessionErrorLayer = it.layer(
   makeCodexAdapterLive({ manager: sessionErrorManager }).pipe(
     Layer.provideMerge(ServerConfig.layerTest(process.cwd(), process.cwd())),
     Layer.provideMerge(providerSessionDirectoryTestLayer),
+    Layer.provideMerge(AnthropicEnvOverridesLive),
     Layer.provideMerge(CodexOpenAiEnvOverridesLive),
     Layer.provideMerge(NodeServices.layer),
   ),
@@ -286,6 +289,7 @@ const lifecycleLayer = it.layer(
   makeCodexAdapterLive({ manager: lifecycleManager }).pipe(
     Layer.provideMerge(ServerConfig.layerTest(process.cwd(), process.cwd())),
     Layer.provideMerge(providerSessionDirectoryTestLayer),
+    Layer.provideMerge(AnthropicEnvOverridesLive),
     Layer.provideMerge(CodexOpenAiEnvOverridesLive),
     Layer.provideMerge(NodeServices.layer),
   ),

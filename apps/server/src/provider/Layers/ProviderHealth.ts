@@ -14,7 +14,7 @@ import type {
   ServerProviderStatus,
   ServerProviderStatusState,
 } from "@t3tools/contracts";
-import { Array, Effect, Fiber, FileSystem, Layer, Option, Path, Result, Stream } from "effect";
+import { Array, Effect, Fiber, FileSystem, Layer, Option, Path, Ref, Result, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 import {
@@ -23,6 +23,7 @@ import {
   parseCodexCliVersion,
 } from "../codexCliVersion";
 import { ProviderHealth, type ProviderHealthShape } from "../Services/ProviderHealth";
+import { AnthropicEnvOverrides } from "../Services/AnthropicEnvOverrides";
 
 const DEFAULT_TIMEOUT_MS = 4_000;
 const CODEX_PROVIDER = "codex" as const;
@@ -491,113 +492,155 @@ export function parseClaudeAuthStatusFromOutput(result: CommandResult): {
   };
 }
 
-export const checkClaudeProviderStatus: Effect.Effect<
-  ServerProviderStatus,
-  never,
-  ChildProcessSpawner.ChildProcessSpawner
-> = Effect.gen(function* () {
-  const checkedAt = new Date().toISOString();
+export const makeCheckClaudeProviderStatus = (options?: {
+  readonly hasExternalAuthToken?: boolean;
+}): Effect.Effect<ServerProviderStatus, never, ChildProcessSpawner.ChildProcessSpawner> =>
+  Effect.gen(function* () {
+    const checkedAt = new Date().toISOString();
 
-  // Probe 1: `claude --version` — is the CLI reachable?
-  const versionProbe = yield* runClaudeCommand(["--version"]).pipe(
-    Effect.timeoutOption(DEFAULT_TIMEOUT_MS),
-    Effect.result,
-  );
+    // Probe 1: `claude --version` — is the CLI reachable?
+    const versionProbe = yield* runClaudeCommand(["--version"]).pipe(
+      Effect.timeoutOption(DEFAULT_TIMEOUT_MS),
+      Effect.result,
+    );
 
-  if (Result.isFailure(versionProbe)) {
-    const error = versionProbe.failure;
+    if (Result.isFailure(versionProbe)) {
+      const error = versionProbe.failure;
+      return {
+        provider: CLAUDE_AGENT_PROVIDER,
+        status: "error" as const,
+        available: false,
+        authStatus: "unknown" as const,
+        checkedAt,
+        message: isCommandMissingCause(error)
+          ? "Claude Agent CLI (`claude`) is not installed or not on PATH."
+          : `Failed to execute Claude Agent CLI health check: ${error instanceof Error ? error.message : String(error)}.`,
+      };
+    }
+
+    if (Option.isNone(versionProbe.success)) {
+      return {
+        provider: CLAUDE_AGENT_PROVIDER,
+        status: "error" as const,
+        available: false,
+        authStatus: "unknown" as const,
+        checkedAt,
+        message:
+          "Claude Agent CLI is installed but failed to run. Timed out while running command.",
+      };
+    }
+
+    const version = versionProbe.success.value;
+    if (version.code !== 0) {
+      const detail = detailFromResult(version);
+      return {
+        provider: CLAUDE_AGENT_PROVIDER,
+        status: "error" as const,
+        available: false,
+        authStatus: "unknown" as const,
+        checkedAt,
+        message: detail
+          ? `Claude Agent CLI is installed but failed to run. ${detail}`
+          : "Claude Agent CLI is installed but failed to run.",
+      };
+    }
+
+    // When an external auth token is provided (ANTHROPIC_AUTH_TOKEN via
+    // settings or process.env), authentication is handled through that
+    // token rather than `claude auth login`. Skip the auth probe.
+    if (options?.hasExternalAuthToken) {
+      return {
+        provider: CLAUDE_AGENT_PROVIDER,
+        status: "ready" as const,
+        available: true,
+        authStatus: "unknown" as const,
+        checkedAt,
+        message: "Using an external Anthropic auth token; `claude auth` login check skipped.",
+      } satisfies ServerProviderStatus;
+    }
+
+    // Probe 2: `claude auth status` — is the user authenticated?
+    const authProbe = yield* runClaudeCommand(["auth", "status"]).pipe(
+      Effect.timeoutOption(DEFAULT_TIMEOUT_MS),
+      Effect.result,
+    );
+
+    if (Result.isFailure(authProbe)) {
+      const error = authProbe.failure;
+      return {
+        provider: CLAUDE_AGENT_PROVIDER,
+        status: "warning" as const,
+        available: true,
+        authStatus: "unknown" as const,
+        checkedAt,
+        message:
+          error instanceof Error
+            ? `Could not verify Claude authentication status: ${error.message}.`
+            : "Could not verify Claude authentication status.",
+      };
+    }
+
+    if (Option.isNone(authProbe.success)) {
+      return {
+        provider: CLAUDE_AGENT_PROVIDER,
+        status: "warning" as const,
+        available: true,
+        authStatus: "unknown" as const,
+        checkedAt,
+        message: "Could not verify Claude authentication status. Timed out while running command.",
+      };
+    }
+
+    const parsed = parseClaudeAuthStatusFromOutput(authProbe.success.value);
     return {
       provider: CLAUDE_AGENT_PROVIDER,
-      status: "error" as const,
-      available: false,
-      authStatus: "unknown" as const,
-      checkedAt,
-      message: isCommandMissingCause(error)
-        ? "Claude Agent CLI (`claude`) is not installed or not on PATH."
-        : `Failed to execute Claude Agent CLI health check: ${error instanceof Error ? error.message : String(error)}.`,
-    };
-  }
-
-  if (Option.isNone(versionProbe.success)) {
-    return {
-      provider: CLAUDE_AGENT_PROVIDER,
-      status: "error" as const,
-      available: false,
-      authStatus: "unknown" as const,
-      checkedAt,
-      message: "Claude Agent CLI is installed but failed to run. Timed out while running command.",
-    };
-  }
-
-  const version = versionProbe.success.value;
-  if (version.code !== 0) {
-    const detail = detailFromResult(version);
-    return {
-      provider: CLAUDE_AGENT_PROVIDER,
-      status: "error" as const,
-      available: false,
-      authStatus: "unknown" as const,
-      checkedAt,
-      message: detail
-        ? `Claude Agent CLI is installed but failed to run. ${detail}`
-        : "Claude Agent CLI is installed but failed to run.",
-    };
-  }
-
-  // Probe 2: `claude auth status` — is the user authenticated?
-  const authProbe = yield* runClaudeCommand(["auth", "status"]).pipe(
-    Effect.timeoutOption(DEFAULT_TIMEOUT_MS),
-    Effect.result,
-  );
-
-  if (Result.isFailure(authProbe)) {
-    const error = authProbe.failure;
-    return {
-      provider: CLAUDE_AGENT_PROVIDER,
-      status: "warning" as const,
+      status: parsed.status,
       available: true,
-      authStatus: "unknown" as const,
+      authStatus: parsed.authStatus,
       checkedAt,
-      message:
-        error instanceof Error
-          ? `Could not verify Claude authentication status: ${error.message}.`
-          : "Could not verify Claude authentication status.",
-    };
-  }
+      ...(parsed.message ? { message: parsed.message } : {}),
+    } satisfies ServerProviderStatus;
+  });
 
-  if (Option.isNone(authProbe.success)) {
-    return {
-      provider: CLAUDE_AGENT_PROVIDER,
-      status: "warning" as const,
-      available: true,
-      authStatus: "unknown" as const,
-      checkedAt,
-      message: "Could not verify Claude authentication status. Timed out while running command.",
-    };
-  }
-
-  const parsed = parseClaudeAuthStatusFromOutput(authProbe.success.value);
-  return {
-    provider: CLAUDE_AGENT_PROVIDER,
-    status: parsed.status,
-    available: true,
-    authStatus: parsed.authStatus,
-    checkedAt,
-    ...(parsed.message ? { message: parsed.message } : {}),
-  } satisfies ServerProviderStatus;
-});
+export const checkClaudeProviderStatus = makeCheckClaudeProviderStatus();
 
 // ── Layer ───────────────────────────────────────────────────────────
 
 export const ProviderHealthLive = Layer.effect(
   ProviderHealth,
   Effect.gen(function* () {
-    const statusesFiber = yield* Effect.all([checkCodexProviderStatus, checkClaudeProviderStatus], {
-      concurrency: "unbounded",
-    }).pipe(Effect.forkScoped);
+    const anthropicEnvOverrides = yield* AnthropicEnvOverrides;
+    const spawnerService = yield* ChildProcessSpawner.ChildProcessSpawner;
+
+    // Codex checks can run eagerly at startup (no external overrides needed).
+    const codexFiber = yield* checkCodexProviderStatus.pipe(Effect.forkScoped);
+
+    // Claude auth check is deferred to first access so it can read the
+    // latest AnthropicEnvOverrides (set by the client after WS connect).
+    const claudeStatusRef = yield* Ref.make<ServerProviderStatus | null>(null);
+
+    const getClaudeStatus = Effect.gen(function* () {
+      const cached = yield* Ref.get(claudeStatusRef);
+      if (cached !== null) return cached;
+
+      const anthState = yield* anthropicEnvOverrides.get;
+      const hasExternalAuthToken = Boolean(
+        anthState.anthropicAuthToken?.trim() ||
+        process.env.ANTHROPIC_AUTH_TOKEN ||
+        process.env.ANTHROPIC_API_KEY,
+      );
+
+      const status = yield* makeCheckClaudeProviderStatus({ hasExternalAuthToken }).pipe(
+        Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawnerService),
+      );
+      yield* Ref.set(claudeStatusRef, status);
+      return status;
+    });
 
     return {
-      getStatuses: Fiber.join(statusesFiber),
+      getStatuses: Effect.all([Fiber.join(codexFiber), getClaudeStatus], {
+        concurrency: "unbounded",
+      }),
     } satisfies ProviderHealthShape;
   }),
 );

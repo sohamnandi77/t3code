@@ -38,6 +38,7 @@ import {
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
 import { CodexOpenAiEnvOverrides } from "../Services/CodexOpenAiEnvOverrides.ts";
+import { AnthropicEnvOverrides } from "../Services/AnthropicEnvOverrides.ts";
 import { type EventNdjsonLogger, makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
 
 const PROVIDER = "codex" as const;
@@ -1263,6 +1264,7 @@ const makeCodexAdapter = (options?: CodexAdapterLiveOptions) =>
     const fileSystem = yield* FileSystem.FileSystem;
     const serverConfig = yield* Effect.service(ServerConfig);
     const codexOpenAiEnvOverrides = yield* CodexOpenAiEnvOverrides;
+    const anthropicEnvOverrides = yield* AnthropicEnvOverrides;
     const nativeEventLogger =
       options?.nativeEventLogger ??
       (options?.nativeEventLogPath !== undefined
@@ -1300,6 +1302,7 @@ const makeCodexAdapter = (options?: CodexAdapterLiveOptions) =>
         }
 
         const openAiOverrides = yield* codexOpenAiEnvOverrides.get;
+        const anthOverrides = yield* anthropicEnvOverrides.get;
         const managerInput: CodexAppServerStartSessionInput = {
           threadId: input.threadId,
           provider: "codex",
@@ -1311,6 +1314,12 @@ const makeCodexAdapter = (options?: CodexAdapterLiveOptions) =>
           ...(openAiOverrides.openaiApiKey ? { openaiApiKey: openAiOverrides.openaiApiKey } : {}),
           ...(openAiOverrides.openaiBaseUrl
             ? { openaiBaseUrl: openAiOverrides.openaiBaseUrl }
+            : {}),
+          ...(anthOverrides.anthropicBaseUrl
+            ? { anthropicBaseUrl: anthOverrides.anthropicBaseUrl }
+            : {}),
+          ...(anthOverrides.anthropicAuthToken
+            ? { anthropicAuthToken: anthOverrides.anthropicAuthToken }
             : {}),
           runtimeMode: input.runtimeMode,
           ...(input.model !== undefined ? { model: input.model } : {}),

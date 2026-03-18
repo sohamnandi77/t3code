@@ -112,6 +112,7 @@ function SettingsRouteView() {
   const [isOpeningKeybindings, setIsOpeningKeybindings] = useState(false);
   const [openKeybindingsError, setOpenKeybindingsError] = useState<string | null>(null);
   const [showCodexApiKey, setShowCodexApiKey] = useState(false);
+  const [showAnthropicAuthToken, setShowAnthropicAuthToken] = useState(false);
   const [customModelInputByProvider, setCustomModelInputByProvider] = useState<
     Record<ProviderKind, string>
   >({
@@ -126,6 +127,8 @@ function SettingsRouteView() {
   const codexHomePath = settings.codexHomePath;
   const codexOpenaiBaseUrl = settings.codexOpenaiBaseUrl;
   const codexOpenaiApiKey = settings.codexOpenaiApiKey;
+  const anthropicBaseUrl = settings.anthropicBaseUrl;
+  const anthropicAuthToken = settings.anthropicAuthToken;
   const keybindingsConfigPath = serverConfigQuery.data?.keybindingsConfigPath ?? null;
   const availableEditors = serverConfigQuery.data?.availableEditors;
 
@@ -426,6 +429,76 @@ function SettingsRouteView() {
                     }
                   >
                     Reset codex overrides
+                  </Button>
+                </div>
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-border bg-card p-5">
+              <div className="mb-4">
+                <h2 className="text-sm font-medium text-foreground">Claude Code</h2>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  These overrides apply to new sessions and let you customize how Claude connects to
+                  the Anthropic API.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <label htmlFor="anthropic-base-url" className="block space-y-1">
+                  <span className="text-xs font-medium text-foreground">ANTHROPIC_BASE_URL</span>
+                  <Input
+                    id="anthropic-base-url"
+                    value={anthropicBaseUrl}
+                    onChange={(event) => updateSettings({ anthropicBaseUrl: event.target.value })}
+                    placeholder="https://api.anthropic.com"
+                    spellCheck={false}
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    Optional override for the Anthropic API base URL.
+                  </span>
+                </label>
+
+                <div className="space-y-1">
+                  <span className="text-xs font-medium text-foreground">ANTHROPIC_AUTH_TOKEN</span>
+                  <div className="flex gap-2">
+                    <Input
+                      id="anthropic-auth-token"
+                      value={anthropicAuthToken}
+                      type={showAnthropicAuthToken ? "text" : "password"}
+                      onChange={(event) =>
+                        updateSettings({
+                          anthropicAuthToken: event.target.value,
+                        })
+                      }
+                      placeholder="sk-ant-..."
+                      spellCheck={false}
+                      autoComplete="off"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setShowAnthropicAuthToken((value) => !value)}
+                    >
+                      {showAnthropicAuthToken ? "Hide" : "Show"}
+                    </Button>
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    Stored on this device only. The server does not persist it to thread history.
+                  </span>
+                </div>
+
+                <div className="flex justify-end">
+                  <Button
+                    size="xs"
+                    variant="outline"
+                    onClick={() =>
+                      updateSettings({
+                        anthropicBaseUrl: defaults.anthropicBaseUrl,
+                        anthropicAuthToken: defaults.anthropicAuthToken,
+                      })
+                    }
+                  >
+                    Reset Anthropic overrides
                   </Button>
                 </div>
               </div>

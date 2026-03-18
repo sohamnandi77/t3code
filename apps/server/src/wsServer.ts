@@ -56,6 +56,7 @@ import { OrchestrationReactor } from "./orchestration/Services/OrchestrationReac
 import { ProviderService } from "./provider/Services/ProviderService";
 import { ProviderHealth } from "./provider/Services/ProviderHealth";
 import { CodexOpenAiEnvOverrides } from "./provider/Services/CodexOpenAiEnvOverrides";
+import { AnthropicEnvOverrides } from "./provider/Services/AnthropicEnvOverrides";
 import { CheckpointDiffQuery } from "./checkpointing/Services/CheckpointDiffQuery";
 import { clamp } from "effect/Number";
 import { Open, resolveAvailableEditors } from "./open";
@@ -210,7 +211,8 @@ export type ServerCoreRuntimeServices =
   | OrchestrationReactor
   | ProviderService
   | ProviderHealth
-  | CodexOpenAiEnvOverrides;
+  | CodexOpenAiEnvOverrides
+  | AnthropicEnvOverrides;
 
 export type ServerRuntimeServices =
   | ServerCoreRuntimeServices
@@ -257,6 +259,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   const keybindingsManager = yield* Keybindings;
   const providerHealth = yield* ProviderHealth;
   const codexOpenAiEnvOverrides = yield* CodexOpenAiEnvOverrides;
+  const anthropicEnvOverrides = yield* AnthropicEnvOverrides;
   const git = yield* GitCore;
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -900,6 +903,11 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
       case WS_METHODS.codexSetOpenAiEnv: {
         const body = stripRequestTag(request.body);
         return yield* codexOpenAiEnvOverrides.set(body);
+      }
+
+      case WS_METHODS.anthropicSetEnv: {
+        const body = stripRequestTag(request.body);
+        return yield* anthropicEnvOverrides.set(body);
       }
 
       default: {

@@ -38,6 +38,7 @@ import { ProjectSearchEntriesInput, ProjectWriteFileInput } from "./project";
 import { OpenInEditorInput } from "./editor";
 import { ServerConfigUpdatedPayload } from "./server";
 import { CodexSetOpenAiEnvInput } from "./codex";
+import { AnthropicSetEnvInput } from "./anthropic";
 
 // ── WebSocket RPC Method Names ───────────────────────────────────────
 
@@ -79,6 +80,9 @@ export const WS_METHODS = {
 
   // Codex meta
   codexSetOpenAiEnv: "codex.setOpenAiEnv",
+
+  // Anthropic meta
+  anthropicSetEnv: "anthropic.setEnv",
 } as const;
 
 // ── Push Event Channels ──────────────────────────────────────────────
@@ -146,6 +150,9 @@ const WebSocketRequestBody = Schema.Union([
 
   // Codex meta
   tagRequestBody(WS_METHODS.codexSetOpenAiEnv, CodexSetOpenAiEnvInput),
+
+  // Anthropic meta
+  tagRequestBody(WS_METHODS.anthropicSetEnv, AnthropicSetEnvInput),
 ]);
 
 export const WebSocketRequest = Schema.Struct({
